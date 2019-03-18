@@ -1,0 +1,11 @@
+wp.mail.qq.com	r,u,s,k,t,i,r
+safebrowsing.googleapis.com	$ct,key,$httpMethod,$req
+www.baidu.com	wd,tn,ie,action
+www.baidu.com	wd,tn,ie
+ss0.baidu.com	w,h,s
+ss0.bdstatic.com	imglist,cb
+sp0.baidu.com	wd,json,p,sid,req,bs,csor,cb
+www.baidu.com	callback,num,sid
+sp2.baidu.com	url,query,cb,data_name,ie,oe,format,t
+www.baidu.com	url,wd,eqid
+s13.cnzz.com	id,web_id
