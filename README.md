@@ -1,10 +1,11 @@
-## 原项目地址
+## burp字典收集
+希望我能一直更新吧
+
+得在burp上安装一个jython
+
+通过每一次请求来自动存入mysql
+
+
+
+## 3x
 https://github.com/TEag1e/BurpCollector
-
-## 改动
-增加了三个表更好用于字典的收集
-path_dict
-param_dict
-file_dict
-
-专门用于收集目录更好的做fuzz字典

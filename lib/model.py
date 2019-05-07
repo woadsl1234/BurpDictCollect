@@ -1,8 +1,8 @@
-import json
 import warnings
 import pymysql
-import os
-
+import re
+from lib.data import DATA
+from lib.config import DB_HOST,DB_DATABASES,DB_PASSWORD,DB_PORT,DB_USER
 
 warnings.filterwarnings("ignore")
 
@@ -13,43 +13,30 @@ class MysqlController():
         self.loadMysqlPayload()
 
     # log file to Mysql
-    def coreProcessor(self, pathLog, fileLog, paramLog):
-        
-        self._pathLog = pathLog
-        self._fileLog = fileLog
-        self._paramLog = paramLog
-
-        with open('../config.ini')as config_f:
-            config = json.load(config_f)
-
-        self._whiteHosts = config.get('whiteHosts')
+    def coreProcessor(self):
 
         '''
         dataDict = {
-            'path':[
-                ('host','path')],
-            'file':[
-                ('host','file')],
-            'param':[
-                ('host','param')]}
+            'path':
+                ('host','path'),
+            'file':
+                ('host','file'),
+            'param':
+                ('host','param')}
         '''
         dataDict = {
-            'path':self.getDataFromLog(self._pathLog),
-            'file':self.getDataFromLog(self._fileLog),
-            'param':self.getDataFromLog(self._paramLog)}
-
+            'path':[(DATA.host ,DATA.path)],
+            'file':[(DATA.host ,DATA.file)],
+            'param':[(DATA.host ,DATA.params)]}
         self.dataStorage(dataDict)
 
     def loadMysqlConfig(self):
-    	
-    	with open('../config.ini')as config_f:
-    		mysql_config = json.load(config_f).get('mysql')
 
-        self._host = mysql_config.get('host')
-        self._user = mysql_config.get('user')
-        self._password = mysql_config.get('password')
-        self._port = int(mysql_config.get('port'))
-        self._database = mysql_config.get('database')
+        self._host = DB_HOST
+        self._user = DB_USER
+        self._password = DB_PASSWORD
+        self._port = DB_PORT
+        self._database = DB_DATABASES
 
     def loadMysqlPayload(self):
 
@@ -165,18 +152,22 @@ class MysqlController():
     # testing mysql connections
     def connectTest(self):
 
+
+        connection = pymysql.connect(
+            host=self._host,
+            user=self._user,
+            password=self._password,
+            port=self._port,
+
+            cursorclass=pymysql.cursors.DictCursor)
+        print('\n'+'='*10)
+        print('MySQL Connection Succession')
+        print('='*10+'\n')
+
         try:
-            connection = pymysql.connect(host=self._host,
-                user=self._user,
-                password=self._password,
-                port=self._port,
-                cursorclass=pymysql.cursors.DictCursor)
-            print('\n'+'='*10)
-            print('MySQL Connection Succession')
-            print('='*10+'\n')
-
+            pass
         except Exception as e:
-
+            print(e)
             if e[0] == 1045:
                 print('MySQL Access denied !!')
         else:
@@ -199,39 +190,16 @@ class MysqlController():
 
             return True
 
-    # @return [(host,orther),]
-    def getDataFromLog(self, logFile):
-
-        tempData = []
-
-        with open(logFile)as log_f:
-
-            for line in log_f:
-                line = line.strip()
-                host,orther = line.split('\t')
-
-                # The host that is not on the whitelist will be reset to empty
-                # for whiteHost in self._whiteHosts:
-                #     if not whiteHost or not host.endswith(whiteHost):
-                #         host = ''
-                #     else:
-                #         host = '*.{}'.format(whiteHost)
-
-                tempData.append((host, orther))
-        print(tempData)
-        return tempData
-
     '''
     dataDict = {
-        'path':[
-            ('host','path')],
-        'file':[
-            ('host','file')],
-        'param':[
-            ('host','param')]}
+        'path':
+            ('host','path'),
+        'file':
+            ('host','file'),
+        'param':
+            ('host','param')}
     '''
     def dataStorage(self, dataDict):
-
         try:
             connection = pymysql.connect(host=self._host,
                 user=self._user,
@@ -243,7 +211,7 @@ class MysqlController():
         except Exception as e:
 
             if e[0] == 1045:
-                print('MySQL Access denied !!')                
+                print('MySQL Access denied !!')
         else:
 
             cursor = connection.cursor()
@@ -251,22 +219,25 @@ class MysqlController():
             if dataDict.get('path'):
                 for host, paths in dataDict.get('path'):
                     self.operateTablepath(cursor, host, paths)
-                    for path in paths[1:-1].split('/'):
-                        self.operateTablepath_dict(cursor, path)
+                    for path in paths.split('/'):
+                        if path != '' and re.match(r'[a-zA-Z]{1,30}',path):
+                            self.operateTablepath_dict(cursor, path)
                 connection.commit()
 
             if dataDict.get('file'):
                 for host, files in dataDict.get('file'):
-                    self.operateTableFile(cursor, host, files)
-                    self.operateTableFile_dict(cursor, files)
+                    if len(files) < 20 :
+                        self.operateTableFile(cursor, host, files)
+                        self.operateTableFile_dict(cursor, files)
 
                 connection.commit()
 
             if dataDict.get('param'):
                 for host,params in dataDict.get('param'):
                     for param in params.split(','):
-                        self.operateTableParam(cursor, host, param)
-                        self.operateTableParam_dict(cursor,param)
+                        if len(param) < 20 and param != '' and re.match(r'[a-zA-Z]{1,20}',param):
+                            self.operateTableParam(cursor, host, param)
+                            self.operateTableParam_dict(cursor,param)
                 connection.commit()
 
             connection.close()
@@ -331,11 +302,3 @@ class MysqlController():
         else:
             cursor.execute(self._updateTableFile_DictCount, [file])
 
-
-
-# if config.get('test') :
-#     with open('../config.ini')as config_f:
-#         config = json.load(config_f)
-#     os.chdir('log')
-#     MysqlController().connectTest()
-#     MysqlController().coreProcessor('20190111221523path.log', '20190111221523file.log', '20190111221523param.log')

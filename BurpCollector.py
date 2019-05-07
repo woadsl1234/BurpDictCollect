@@ -1,27 +1,26 @@
 #!coding:utf-8
 
-'''
-======
-TEag1e@www.teagle.top
-米斯特安全团队@www.hi-ourlife.com
-======
-'''
-
-import time
-import os
-import json
-from urlparse import urlparse
-import pymysql
-from MysqlController import MysqlController
+from lib.model import MysqlController
+from lib.processing import DataExtractor
+from lib.data import DATA
+from lib.common import filterFile, filterHost
 
 from burp import IBurpExtender
 from burp import IExtensionStateListener
 from burp import IContextMenuFactory
+from burp import IProxyListener
+from burp import IHttpListener
+from burp import IExtensionHelpers
 
-from javax.swing import JMenuItem
+from java.io import PrintWriter
 
+import sys
 
-class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory):
+reload(sys)
+
+sys.setdefaultencoding('utf-8')
+
+class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory, IHttpListener, IExtensionHelpers):
 
     def registerExtenderCallbacks(self, callbacks):
 
@@ -30,9 +29,15 @@ class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory):
 
         self._callbacks = callbacks
 
-        # create Log File
-        self.createLogFile()
+        self._helpers = callbacks.getHelpers()
 
+        # 获取我们的输出流
+        self._stdout = PrintWriter(callbacks.getStdout(), True)
+
+        print("================================")
+        print("         author:ckj123          ")
+        print("       version:v0.000001        ")
+        print("================================")
         # test the database connection
         MysqlController().connectTest()
 
@@ -42,193 +47,35 @@ class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory):
         # register ourselves as an Extension listener
         callbacks.registerExtensionStateListener(self)
 
-    #
-    # create log files with current time
-    #
-
-    def createLogFile(self):
-
-        # currentTime = Year Month Day Hour Minute
-        currentTime = time.strftime('%Y-%m-%d_%H_%M_%S',time.localtime())
-
-        # make directory
-        if not os.path.exists('log'):
-            os.mkdir('log')
-
-        os.chdir('log')
-
-        # make log file
-        self._paramLog = '{}_param.log'.format(currentTime)
-        self._fileLog = '{}_file.log'.format(currentTime)
-        self._pathLog = '{}_path.log'.format(currentTime)
-
-        if not os.path.exists(self._paramLog):
-            open(self._paramLog,'w').close()
-        if not os.path.exists(self._fileLog):
-            open(self._fileLog,'w').close()
-        if not os.path.exists(self._pathLog):
-            open(self._pathLog,'w').close()
+        # register ourselves as an HTTP listener
+        callbacks.registerHttpListener(self)
 
     #
-    # implement IContextMenuFactory
+    # 实现 IHttpListener
     #
 
-    def createMenuItems(self, invocation): 
+    def processHttpMessage(self, toolFlag ,messageIsRequest, messageInfo):
+        if toolFlag == 4 or toolFlag == 16 or toolFlag == 8 or toolFlag == 64:
+            # proxy or scanner or spider
+            if not messageIsRequest:
+                ###### response
+                # response = messageInfo.getResponse()
+                # analyzedResponse = self._helpers.analyzeResponse(response)
+                # headerList = analyzedResponse.getHeaders()
+                # body = response[analyzedResponse.getBodyOffset():].tostring()
+                # print("response")
+                # print(analyzedResponse.getHeaders())
+                # print(body)
+                pass
+            else:
+                request = messageInfo.getRequest()
+                httpService = messageInfo.getHttpService()
+                # body = request[analyzedRequest.getBodyOffset():].tostring()
+                analyzedRequest = self._helpers.analyzeRequest(httpService,request)
+                # method = analyzedRequest.getMethod()
 
-        mainMenu = JMenuItem('History To Log',
-            actionPerformed = self.menuOnClick)
-        return [mainMenu]
-
-    #
-    # stores Data when Clicking on Context Menu
-    #
-
-    def menuOnClick(self, event):
-
-        # extract path,file and param from Proxy History 
-        DataExtractor(self._callbacks, self._pathLog, self._fileLog, self._paramLog)
-        # stored in MySQL from the log file
-        MysqlController().coreProcessor(self._pathLog, self._fileLog, self._paramLog)
-
-    #
-    # implement IExtensionStateListener
-    #
-
-    def extensionUnloaded(self):
-
-        # extract path,file and param from Proxy History 
-        DataExtractor(self._callbacks, self._pathLog, self._fileLog, self._paramLog)
-
-        # stored in MySQL from the log file
-        MysqlController().coreProcessor(self._pathLog, self._fileLog, self._paramLog)
-
-#
-# extract path,file and param from Proxy History 
-#
-
-class DataExtractor():
-
-    def __init__(self, callbacks, pathLog, fileLog, paramLog):
-
-        self._callbacks = callbacks
-        self._helpers = callbacks.getHelpers()
-        self._pathLog = pathLog
-        self._fileLog = fileLog
-        self._paramLog = paramLog
-        self.coreProcessor()
-    
-    def coreProcessor(self):
-        
-        with open('../config.ini')as config_f:
-            self._config = json.load(config_f)
-
-        allHistoryMessage = self._callbacks.getProxyHistory()
-        
-        # define three variable to remove duplicate data
-        collectionParam = []
-        collectionFile = []
-        collectionPath = []
-
-        # processing each message
-        for historyMessage in allHistoryMessage:
-
-            httpService = historyMessage.getHttpService()
-            requestInfo = self._helpers.analyzeRequest(httpService, historyMessage.getRequest())
-            host = httpService.getHost()
-            url = str(requestInfo.getUrl())
-            path = urlparse(url).path
-            path,file = self.formatPathFile(path)
-
-            # invoke host filter
-            if not self.filterHost(host):
-                continue
-
-            # invoke file filter
-            if not self.filterFile(file):
-                continue
-
-            # path to log
-            currentPath = '{}\t{}'.format(host, path)
-            if path and currentPath not in collectionPath:
-                print(currentPath)
-                with open(self._pathLog, 'a')as path_f:
-                    path_f.write(currentPath+'\n')
-                collectionPath.append(currentPath)
-
-            # file to log 
-            currentFile = '{}\t{}'.format(host, file)
-            if file and currentFile not in collectionFile:
-                print(currentFile)
-                with open(self._fileLog, 'a')as file_f:
-                    file_f.write(currentFile+'\n')
-                collectionFile.append(currentFile)
-
-            # parameters to log
-            paramsObject = requestInfo.getParameters()
-            params = self.processParamsObject(paramsObject)
-            currentParams = '{}\t{}'.format(host, ','.join(params))
-            if params and currentParams not in collectionParam:
-	                print(currentParams)
-	                with open(self._paramLog, 'a')as params_f:
-	                    params_f.write(currentParams+'\n')
-	                collectionParam.append(currentParams)
-
-    # format path and file
-    def formatPathFile(self, path):
-
-        sepIndex = path.rfind('/')
-        # EX: http://xxx/?id=1
-        if path == '/':
-            file = ''
-            path = ''
-        # EX: http://xxx/index.php
-        # file = index.php
-        elif sepIndex == 0:
-            file = path[1:]
-            path = ''
-        # EX: http://xxx/x/index.php
-        # path = /x/
-        # file = index.php
-        else:
-            file = path[sepIndex+1:]
-            path = path[:sepIndex+1]
-            
-
-        return path,file
-
-    # extractor data from host
-    def filterHost(self, host):
-
-        blackHosts = self._config.get('blackHosts')
-
-        for blackHost in blackHosts:
-            if host.endswith(blackHost):
-                return
-
-        return True
-
-    # extractor data from file
-    def filterFile(self, file):
-
-        balckPaths = self._config.get('blackExtension')
-
-        for blackPath in balckPaths:
-            if file.endswith(blackPath):
-                return False
-        return True
-
-    # extract params
-    def processParamsObject(self, paramsObject):
-
-        # get parameters
-        params = []
-        for paramObject in paramsObject:
-
-            # don't process Cookie's Pamrams
-            if paramObject.getType() == 2:
-                continue
-            param = paramObject.getName()
-            if param.startswith('_'):
-                continue
-            params.append(param)
-        return params
+                ###### DataExtractor
+                DataExtractor(httpService.getHost(), analyzedRequest)
+                print(DATA.params)
+                if filterFile(DATA.file) and filterHost(DATA.host):
+                    MysqlController().coreProcessor()
