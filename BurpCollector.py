@@ -55,7 +55,9 @@ class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory, 
     #
 
     def processHttpMessage(self, toolFlag ,messageIsRequest, messageInfo):
-        if toolFlag == 4 or toolFlag == 16 or toolFlag == 8 or toolFlag == 64:
+        ###### 测试用 64是reptear
+        # if toolFlag == 4 or toolFlag == 16 or toolFlag == 8 or toolFlag == 64:
+        if toolFlag == 4 or toolFlag == 16 or toolFlag == 8:
             # proxy or scanner or spider
             if not messageIsRequest:
                 ###### response
@@ -76,6 +78,6 @@ class BurpExtender(IBurpExtender, IExtensionStateListener, IContextMenuFactory, 
 
                 ###### DataExtractor
                 DataExtractor(httpService.getHost(), analyzedRequest)
-                print(DATA.params)
+                # print(DATA.params)
                 if filterFile(DATA.file) and filterHost(DATA.host):
                     MysqlController().coreProcessor()

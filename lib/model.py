@@ -220,7 +220,7 @@ class MysqlController():
                 for host, paths in dataDict.get('path'):
                     self.operateTablepath(cursor, host, paths)
                     for path in paths.split('/'):
-                        if path != '' and re.match(r'[a-zA-Z]{1,30}',path):
+                        if path != '' and re.match(r'[a-zA-Z_]{1,30}',path):
                             self.operateTablepath_dict(cursor, path)
                 connection.commit()
 
@@ -235,7 +235,7 @@ class MysqlController():
             if dataDict.get('param'):
                 for host,params in dataDict.get('param'):
                     for param in params.split(','):
-                        if len(param) < 20 and param != '' and re.match(r'[a-zA-Z]{1,20}',param):
+                        if len(param) < 20 and param != '' and re.match(r'[a-zA-Z_]{1,20}',param):
                             self.operateTableParam(cursor, host, param)
                             self.operateTableParam_dict(cursor,param)
                 connection.commit()
